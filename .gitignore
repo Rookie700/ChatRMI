@@ -1,0 +1,5 @@
+# Ignorar configuraciones de IntelliJ IDEA
+.idea/
+/RMIProject/build/
+/RMIProject/dist/
+/RMIServer/dist/
