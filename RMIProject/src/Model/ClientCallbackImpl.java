@@ -1,6 +1,7 @@
 package Model;
 
 import Interface.ClientCallBack;
+import java.awt.List;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
@@ -35,11 +36,12 @@ public class ClientCallbackImpl extends UnicastRemoteObject implements ClientCal
 
     }
 
+    
     @Override
     public void reciveConectedUsers(ArrayList<String> users) throws RemoteException {
         //System.out.println("se recibir la lista de usuarios en el callback");
         //System.out.println(users);
-        facade.updateConectedUsers(users);
+        facade.updateConectedUsers((ArrayList<String>) users);
     }
 
     @Override

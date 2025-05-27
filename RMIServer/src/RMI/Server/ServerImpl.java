@@ -8,28 +8,51 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import Interface.IServer;
 import Interface.ClientCallBack;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ServerImpl extends UnicastRemoteObject implements IServer {
+
     private final Map<String, ClientCallBack> clients = new ConcurrentHashMap<>();
-    private ArrayList<String> usersList;
+    private final List<String> usersList = new CopyOnWriteArrayList<>();
     ActiveUsersThread activeUsersThread;
 
     public ServerImpl() throws RemoteException {
         super();  // Exporta el objeto
-        usersList = new ArrayList<>();
+        //usersList = new ArrayList<>();
         activeUsersThread = new ActiveUsersThread(this);
     }
 
     /**
-     * Método para registrar un cliente, es decir, añadirlo a la lista de clientes
-     * que maneja el servidor para poder tener acceso futuro. este método tambien
-     * añade el username a la lista de nombres para los usuarios conectados y llama updateList()
+     * Método para registrar un cliente, es decir, añadirlo a la lista de
+     * clientes que maneja el servidor para poder tener acceso futuro. este
+     * método tambien añade el username a la lista de nombres para los usuarios
+     * conectados y llama updateList()
      *
-     * @param cb       Objeto remoto que representa al cliente
+     * @param cb Objeto remoto que representa al cliente
      * @param username la clave para guardar el objeto remoto
      */
-    @Override
-    public synchronized void registerClient(ClientCallBack cb, String username) {
+    private final AtomicBoolean isActiveUsersThreadStarted = new AtomicBoolean(false);
+
+    public void registerClient(ClientCallBack cb, String username) {
+        synchronized (this) {
+            clients.put(username, cb);
+            usersList.add(username);
+        }
+
+        if (isActiveUsersThreadStarted.compareAndSet(false, true)) {
+            activeUsersThread.start();
+        }
+
+        try {
+            updateList();
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public synchronized void registerClient2(ClientCallBack cb, String username) {
         clients.put(username, cb);
         if (clients.size() == 1) {
             activeUsersThread.start();
@@ -47,8 +70,8 @@ public class ServerImpl extends UnicastRemoteObject implements IServer {
      * Envia mensaje directo (privado) de un usuario a otro
      *
      * @param from remitente
-     * @param to   destinatario
-     * @param msg  mensaje a enviar
+     * @param to destinatario
+     * @param msg mensaje a enviar
      * @throws RemoteException
      */
     @Override
@@ -81,7 +104,6 @@ public class ServerImpl extends UnicastRemoteObject implements IServer {
         System.out.println("Cliente '" + username + "' ha cerrado sesión");
     }
 
-
     /**
      * Le da la bienvenida al usuario cuando entra
      *
@@ -101,7 +123,7 @@ public class ServerImpl extends UnicastRemoteObject implements IServer {
         for (Map.Entry<String, ClientCallBack> entry : clients.entrySet()) {
             ClientCallBack callback = entry.getValue();
             if (entry.getKey().equals(sender)) {
-                callback.recivePublicMessage("Tu",message);
+                callback.recivePublicMessage("Tu", message);
                 continue;
             }
             //System.out.println(entry.getKey());
@@ -110,17 +132,17 @@ public class ServerImpl extends UnicastRemoteObject implements IServer {
     }
 
     //MÉTODOS
-
     /**
-     * Manda a actualizar la lista de cada usuario por separado, enviandole la lista
-     * de Strings con los nombres de cada uno
+     * Manda a actualizar la lista de cada usuario por separado, enviandole la
+     * lista de Strings con los nombres de cada uno
      */
     private void updateList() throws RemoteException {
         //System.out.println("lista de clientes:");
         for (Map.Entry<String, ClientCallBack> entry : clients.entrySet()) {
             ClientCallBack callback = entry.getValue();
             //System.out.println(entry.getKey());
-            callback.reciveConectedUsers(usersList);
+            ArrayList<String> arrayList = new ArrayList<>(usersList);
+            callback.reciveConectedUsers(arrayList);
         }
         System.out.println("Lista de Usuarios:");
         System.out.println(usersList);
@@ -129,8 +151,8 @@ public class ServerImpl extends UnicastRemoteObject implements IServer {
 
     // Método en ServerImpl
     public void runList() throws RemoteException {
-        for (Iterator<Map.Entry<String,ClientCallBack>> it = clients.entrySet().iterator(); it.hasNext();) {
-            Map.Entry<String,ClientCallBack> entry = it.next();
+        for (Iterator<Map.Entry<String, ClientCallBack>> it = clients.entrySet().iterator(); it.hasNext();) {
+            Map.Entry<String, ClientCallBack> entry = it.next();
             String user = entry.getKey();
             ClientCallBack cb = entry.getValue();
             try {
