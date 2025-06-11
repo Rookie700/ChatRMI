@@ -1,27 +1,30 @@
 package RMI.Server;
 
+import static java.lang.Thread.sleep;
 import java.rmi.RemoteException;
 
 public class ActiveUsersThread extends Thread {
-    ServerImpl server;
+
+    private final ServerImpl server;
+
     ActiveUsersThread(ServerImpl server) {
         this.server = server;
     }
 
+    @Override
     public void run() {
-        while (true) {
-            System.out.println("corriendo");
-            try {
+        try {
+            // Repite mientras no estemos interrumpidos
+            while (!Thread.currentThread().isInterrupted()) {
                 server.runList();
-            } catch (RemoteException e) {
-                System.out.println("notificado");
-                throw new RuntimeException(e);
+                Thread.sleep(2000);
             }
-            try {
-                sleep(2000);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
+        } catch (InterruptedException ie) {
+            // Al interrumpir, salimos del run() limpiamente
+            // (puedes loguear algo aquí si quieres)
+        } catch (RemoteException re) {
+            re.printStackTrace();
         }
+        System.out.println("ActiveUsersThread terminado.");
     }
 }
