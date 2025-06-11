@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ServerImpl extends UnicastRemoteObject implements IServer {
 
+    private final AtomicBoolean isActiveUsersThreadStarted = new AtomicBoolean(false);
     private final Map<String, ClientCallBack> clients = new ConcurrentHashMap<>();
     private final List<String> usersList = new CopyOnWriteArrayList<>();
     ActiveUsersThread activeUsersThread;
@@ -33,15 +34,17 @@ public class ServerImpl extends UnicastRemoteObject implements IServer {
      * @param cb Objeto remoto que representa al cliente
      * @param username la clave para guardar el objeto remoto
      */
-    private final AtomicBoolean isActiveUsersThreadStarted = new AtomicBoolean(false);
-
     public void registerClient(ClientCallBack cb, String username) {
         synchronized (this) {
             clients.put(username, cb);
             usersList.add(username);
         }
 
+        // Si no hay hilo arrancado, arranca uno nuevo
         if (isActiveUsersThreadStarted.compareAndSet(false, true)) {
+            // 1. Crea una instancia nueva del hilo
+            activeUsersThread = new ActiveUsersThread(this);
+            // 2. Arráncalo
             activeUsersThread.start();
         }
 
@@ -91,15 +94,26 @@ public class ServerImpl extends UnicastRemoteObject implements IServer {
 
     @Override
     public synchronized void unrevisterClient(String username) throws RemoteException {
-        // 1) Elimina el callback del map
-        ClientCallBack cb = clients.remove(username);
-        // 2) Elimina el nombre de la lista de usuarios
+        // 1) Eliminar callback y nombre
+        clients.remove(username);
         usersList.remove(username);
-        // 3) Si quieres, cierra el hilo de heartbeat si ya no quedan clientes
+
+        // 2) Si ya no quedan clientes, detén el hilo de heartbeat
         if (clients.isEmpty()) {
+            // Interrumpe el hilo para que salga de sleep o del loop
             activeUsersThread.interrupt();
+            try {
+                // Espera a que termine
+                activeUsersThread.join();
+            } catch (InterruptedException e) {
+                // Restaurar estado de interrupción si lo necesitas
+                Thread.currentThread().interrupt();
+            }
+            // 3) Resetea la bandera para poder crear un nuevo hilo luego
+            isActiveUsersThreadStarted.set(false);
         }
-        // 4) Notifica a todos los demás que la lista cambió
+
+        // 4) Notificar a los restantes (si hay) que la lista cambió
         updateList();
         System.out.println("Cliente '" + username + "' ha cerrado sesión");
     }
